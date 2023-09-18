@@ -6,52 +6,47 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"image"
-	"image/color"
-	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
-	"os"
 	"strconv"
 	"strings"
 	"time"
+	"bufio"
+	"os"
 
-	"github.com/fogleman/gg"
 	"github.com/vladimirvivien/go4vl/device"
 	"github.com/vladimirvivien/go4vl/v4l2"
 )
 
 var (
-	camera      *device.Device
-	frames      <-chan []byte
-	fps         uint32 = 30
-	pixfmt      v4l2.FourCCType
-	//width       = 3264
-	//height      = 2448
-	height      = 3264
-	width	= 2448
+	camera *device.Device
+	frames <-chan []byte
+	fps    uint32 = 30
+	pixfmt v4l2.FourCCType
+	height = 3264
+	width  = 2448
 
-	streamInfo  string
+	streamInfo string
 )
 
 type PageData struct {
-	StreamInfo     string
-	StreamPath     string
-	ImgWidth       int
-	ImgHeight      int
-	ControlPath    string
+	StreamInfo  string
+	StreamPath  string
+	ImgWidth    int
+	ImgHeight   int
+	ControlPath string
 }
 
 // servePage reads templated HTML
 func servePage(w http.ResponseWriter, r *http.Request) {
 	pd := PageData{
-		StreamInfo:     streamInfo,
-		StreamPath:     fmt.Sprintf("/stream?%d", time.Now().UnixNano()),
-		ImgWidth:       width,
-		ImgHeight:      height,
-		ControlPath:    "/control",
+		StreamInfo:  streamInfo,
+		StreamPath:  fmt.Sprintf("/stream?%d", time.Now().UnixNano()),
+		ImgWidth:    width,
+		ImgHeight:   height,
+		ControlPath: "/control",
 	}
 
 	// Start HTTP response
@@ -83,13 +78,15 @@ func serveVideoStream(w http.ResponseWriter, req *http.Request) {
 			log.Print("skipping empty frame")
 			continue
 		}
-
 		partWriter, err := mimeWriter.CreatePart(partHeader)
 		if err != nil {
 			log.Printf("failed to create multi-part writer: %s", err)
 			return
 		}
 
+		if _, err := partWriter.Write(frame); err != nil {
+			log.Printf("failed to write image: %s", err)
+		}
 	}
 }
 
@@ -134,13 +131,45 @@ func controlVideo(w http.ResponseWriter, req *http.Request) {
 
 }
 
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
+func writeFile(t time.Time) {
+	fmt.Println("Tick at", t)
+	d1 := []byte("hello\ngo\n")
+	err := os.WriteFile("/tmp/dat1", d1, 0644)
+	check(err)
+
+	f, err := os.Create("/tmp/dat2")
+	check(err)
+
+	defer f.Close()
+
+	d2 := []byte{115, 111, 109, 101, 10}
+	n2, err := f.Write(d2)
+	check(err)
+	fmt.Printf("wrote %d bytes\n", n2)
+
+	n3, err := f.WriteString("writes\n")
+	check(err)
+	fmt.Printf("wrote %d bytes\n", n3)
+
+	f.Sync()
+
+	w := bufio.NewWriter(f)
+	n4, err := w.WriteString("buffered\n")
+	check(err)
+	fmt.Printf("wrote %d bytes\n", n4)
+
+	w.Flush()
+}
+
+
 func main() {
 
-	//argsWithProg := os.Args
-	//argsWithoutProg := os.Args[1:]
-
-	//fmt.Println(argsWithProg)
-	//fmt.Println(argsWithoutProg)
 	port := ":9091"
 	devName := "/dev/video0"
 	frameRate := int(fps)
@@ -150,6 +179,19 @@ func main() {
 	if err != nil {
 		skipDefault = true
 	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case t := <-ticker.C:
+				writeFile(t)
+			}
+		}
+	}()
 
 	format := "yuyv"
 	if !skipDefault {
@@ -229,7 +271,7 @@ func main() {
 	log.Println("use url path /timelapse")
 
 	// setup http service
-	http.HandleFunc("/timelapse", servePage)        // returns an html page
+	http.HandleFunc("/timelapse", servePage)     // returns an html page
 	http.HandleFunc("/stream", serveVideoStream) // returns video feed
 	http.HandleFunc("/control", controlVideo)    // applies video controls
 	if err := http.ListenAndServe(port, nil); err != nil {
