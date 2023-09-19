@@ -1,12 +1,14 @@
 package main
 
 import (
-	"bufio"
+//	"bufio"
+//	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
+//	"image"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -136,64 +138,6 @@ func check(e error) {
 	}
 }
 
-func writeFile(defaultDev *device.Device) {
-	frame := defaultDev.GetOutput()
-	t := time.Now()
-//  fileName := "/tmp/video0.jpg"
-
-//	imgFile, err := os.Create("/tmp/video0.jpg")
-//	check(err)
-
-  log.Printf("captured %d bytes", len(frame))
-
-/*
-  if _, err := imgFile.Write(frame); err != nil {
-		log.Printf("failed to write file %s: %s", fileName, err)
-		imgFile.Close()
-	}
-	log.Printf("Saved file: %s", fileName)
-	if err := imgFile.Close(); err != nil {
-		log.Printf("failed to close file %s: %s", fileName, err)
-	}
-*/
-	fmt.Println("Tick at", t)
-	d1 := []byte("hello\ngo\n")
-  err := os.WriteFile("/tmp/dat1", d1, 0644)
-	check(err)
-
-	f, err := os.Create("/tmp/dat2")
-	check(err)
-
-	defer f.Close()
-
-	d2 := []byte{115, 111, 109, 101, 10}
-	n2, err := f.Write(d2)
-	check(err)
-	fmt.Printf("wrote %d bytes\n", n2)
-
-	n3, err := f.WriteString("writes\n")
-	check(err)
-	fmt.Printf("wrote %d bytes\n", n3)
-
-	f.Sync()
-
-	w := bufio.NewWriter(f)
-	n4, err := w.WriteString("buffered\n")
-	check(err)
-	fmt.Printf("wrote %d bytes\n", n4)
-
-	w.Flush()
-}
-
-func fileWriteLoop(defaultDev *device.Device) {
-	ticker := time.NewTicker(500 * time.Millisecond)
-
-	for _ = range ticker.C {
-		fmt.Println("Ticking..")
-		writeFile(defaultDev)
-	}
-}
-
 func main() {
 
 	port := ":9091"
@@ -205,8 +149,6 @@ func main() {
 	if err != nil {
 		skipDefault = true
 	}
-
-	go fileWriteLoop(defaultDev)
 
 	format := "yuyv"
 	if !skipDefault {
@@ -224,10 +166,11 @@ func main() {
 			}
 		}
 	}
+
 	// close device used for default info
-//	if err := defaultDev.Close(); err != nil {
-//		log.Fatalf("failed to close default device: %s", err)
-//	}
+	//	if err := defaultDev.Close(); err != nil {
+	//		log.Fatalf("failed to close default device: %s", err)
+	//	}
 
 	flag.StringVar(&devName, "d", devName, "device name (path)")
 	flag.IntVar(&width, "w", width, "capture width")
@@ -289,9 +232,36 @@ func main() {
 	http.HandleFunc("/timelapse", servePage)     // returns an html page
 	http.HandleFunc("/stream", serveVideoStream) // returns video feed
 	http.HandleFunc("/control", controlVideo)    // applies video controls
-	if err := http.ListenAndServe(port, nil); err != nil {
+go func(){
+  if err := http.ListenAndServe(port, nil); err != nil {
 		log.Fatal(err)
 	}
+}()
+	/////////////////////////
+
+	// process frames from capture channel
+	count := 0
+
+	for frame := range camera.GetOutput() {
+		fileName := fmt.Sprintf("capture_%d.jpg", count)
+		file, err := os.Create(fileName)
+		if err != nil {
+			log.Printf("failed to create file %s: %s", fileName, err)
+			continue
+		}
+		if _, err := file.Write(frame); err != nil {
+			log.Printf("failed to write file %s: %s", fileName, err)
+			continue
+		}
+		log.Printf("Saved file: %s", fileName)
+		if err := file.Close(); err != nil {
+			log.Printf("failed to close file %s: %s", fileName, err)
+		}
+		count++
+
+	}
+
+	/////////////////////////
 }
 
 func getFormatType(fmtStr string) v4l2.FourCCType {
