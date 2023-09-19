@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -10,11 +11,10 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"os"
 	"strconv"
 	"strings"
 	"time"
-	"bufio"
-	"os"
 
 	"github.com/vladimirvivien/go4vl/device"
 	"github.com/vladimirvivien/go4vl/v4l2"
@@ -76,7 +76,6 @@ func serveVideoStream(w http.ResponseWriter, req *http.Request) {
 	for frame = range frames {
 		if len(frame) == 0 {
 			log.Print("skipping empty frame")
-			continue
 		}
 		partWriter, err := mimeWriter.CreatePart(partHeader)
 		if err != nil {
@@ -137,10 +136,29 @@ func check(e error) {
 	}
 }
 
-func writeFile(t time.Time) {
+func writeFile(defaultDev *device.Device) {
+	frame := defaultDev.GetOutput()
+	t := time.Now()
+//  fileName := "/tmp/video0.jpg"
+
+//	imgFile, err := os.Create("/tmp/video0.jpg")
+//	check(err)
+
+  log.Printf("captured %d bytes", len(frame))
+
+/*
+  if _, err := imgFile.Write(frame); err != nil {
+		log.Printf("failed to write file %s: %s", fileName, err)
+		imgFile.Close()
+	}
+	log.Printf("Saved file: %s", fileName)
+	if err := imgFile.Close(); err != nil {
+		log.Printf("failed to close file %s: %s", fileName, err)
+	}
+*/
 	fmt.Println("Tick at", t)
 	d1 := []byte("hello\ngo\n")
-	err := os.WriteFile("/tmp/dat1", d1, 0644)
+  err := os.WriteFile("/tmp/dat1", d1, 0644)
 	check(err)
 
 	f, err := os.Create("/tmp/dat2")
@@ -167,6 +185,14 @@ func writeFile(t time.Time) {
 	w.Flush()
 }
 
+func fileWriteLoop(defaultDev *device.Device) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+
+	for _ = range ticker.C {
+		fmt.Println("Ticking..")
+		writeFile(defaultDev)
+	}
+}
 
 func main() {
 
@@ -180,18 +206,7 @@ func main() {
 		skipDefault = true
 	}
 
-	ticker := time.NewTicker(500 * time.Millisecond)
-	done := make(chan bool)
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			case t := <-ticker.C:
-				writeFile(t)
-			}
-		}
-	}()
+	go fileWriteLoop(defaultDev)
 
 	format := "yuyv"
 	if !skipDefault {
@@ -210,9 +225,9 @@ func main() {
 		}
 	}
 	// close device used for default info
-	if err := defaultDev.Close(); err != nil {
-		log.Fatalf("failed to close default device: %s", err)
-	}
+//	if err := defaultDev.Close(); err != nil {
+//		log.Fatalf("failed to close default device: %s", err)
+//	}
 
 	flag.StringVar(&devName, "d", devName, "device name (path)")
 	flag.IntVar(&width, "w", width, "capture width")
