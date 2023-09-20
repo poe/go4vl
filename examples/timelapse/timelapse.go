@@ -1,14 +1,11 @@
 package main
 
 import (
-//	"bufio"
-//	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
-//	"image"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -27,8 +24,8 @@ var (
 	frames <-chan []byte
 	fps    uint32 = 30
 	pixfmt v4l2.FourCCType
-	height = 3264
-	width  = 2448
+	height = 2448
+	width  = 3264
 
 	streamInfo string
 )
@@ -65,6 +62,24 @@ func servePage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func getFormatType(fmtStr string) v4l2.FourCCType {
+	switch strings.ToLower(fmtStr) {
+	case "jpeg":
+		return v4l2.PixelFmtJPEG
+	case "mpeg":
+		return v4l2.PixelFmtMPEG
+	case "mjpeg":
+		return v4l2.PixelFmtMJPEG
+	case "h264", "h.264":
+		return v4l2.PixelFmtH264
+	case "yuyv":
+		return v4l2.PixelFmtYUYV
+	case "rgb":
+		return v4l2.PixelFmtRGB24
+	}
+	return v4l2.PixelFmtMPEG
 }
 
 // start http service
@@ -140,8 +155,10 @@ func check(e error) {
 
 func main() {
 
-	port := ":9091"
-	devName := "/dev/video0"
+	camera_number := "0"
+	port := ":909" + camera_number
+	devString := "video" + camera_number
+	devName := "/dev/" + devString
 	frameRate := int(fps)
 	buffSize := 4
 	defaultDev, err := device.Open(devName)
@@ -167,12 +184,11 @@ func main() {
 		}
 	}
 
-	// close device used for default info
-	//	if err := defaultDev.Close(); err != nil {
-	//		log.Fatalf("failed to close default device: %s", err)
-	//	}
+	if err := defaultDev.Close(); err != nil {
+		log.Fatalf("failed to close default device: %s", err)
+	}
 
-	flag.StringVar(&devName, "d", devName, "device name (path)")
+	flag.StringVar(&camera_number, "c", camera_number, "camera number")
 	flag.IntVar(&width, "w", width, "capture width")
 	flag.IntVar(&height, "h", height, "capture height")
 	flag.StringVar(&format, "f", format, "pixel format")
@@ -180,6 +196,10 @@ func main() {
 	flag.IntVar(&frameRate, "r", frameRate, "frames per second (fps)")
 	flag.IntVar(&buffSize, "b", buffSize, "device buffer size")
 	flag.Parse()
+
+	port = ":909" + camera_number
+	devString = "video" + camera_number
+	devName = "/dev/" + devString
 
 	// open camera and setup camera
 	camera, err = device.Open(devName,
@@ -232,52 +252,38 @@ func main() {
 	http.HandleFunc("/timelapse", servePage)     // returns an html page
 	http.HandleFunc("/stream", serveVideoStream) // returns video feed
 	http.HandleFunc("/control", controlVideo)    // applies video controls
-go func(){
-  if err := http.ListenAndServe(port, nil); err != nil {
-		log.Fatal(err)
-	}
-}()
-	/////////////////////////
-
+	go func() {
+		if err := http.ListenAndServe(port, nil); err != nil {
+			log.Fatal(err)
+		}
+	}()
 	// process frames from capture channel
-	count := 0
+	go func() {
+		count := 0
 
-	for frame := range camera.GetOutput() {
-		fileName := fmt.Sprintf("capture_%d.jpg", count)
-		file, err := os.Create(fileName)
-		if err != nil {
-			log.Printf("failed to create file %s: %s", fileName, err)
-			continue
-		}
-		if _, err := file.Write(frame); err != nil {
-			log.Printf("failed to write file %s: %s", fileName, err)
-			continue
-		}
-		log.Printf("Saved file: %s", fileName)
-		if err := file.Close(); err != nil {
-			log.Printf("failed to close file %s: %s", fileName, err)
-		}
-		count++
+		for frame := range camera.GetOutput() {
+			fileName := fmt.Sprintf("/timelapse/"+devString+"/capture_%d.jpg", count)
+			file, err := os.Create(fileName)
+			if err != nil {
+				log.Printf("failed to create file %s: %s", fileName, err)
+				continue
+			}
+			if _, err := file.Write(frame); err != nil {
+				log.Printf("failed to write file %s: %s", fileName, err)
+				continue
+			}
+			log.Printf("Saved file: %s", fileName)
+			if err := file.Close(); err != nil {
+				log.Printf("failed to close file %s: %s", fileName, err)
+			}
+			count++
+			time.Sleep(250 * time.Millisecond)
 
+		}
+
+	}()
+
+	for {
+		time.Sleep(5000 * time.Millisecond)
 	}
-
-	/////////////////////////
-}
-
-func getFormatType(fmtStr string) v4l2.FourCCType {
-	switch strings.ToLower(fmtStr) {
-	case "jpeg":
-		return v4l2.PixelFmtJPEG
-	case "mpeg":
-		return v4l2.PixelFmtMPEG
-	case "mjpeg":
-		return v4l2.PixelFmtMJPEG
-	case "h264", "h.264":
-		return v4l2.PixelFmtH264
-	case "yuyv":
-		return v4l2.PixelFmtYUYV
-	case "rgb":
-		return v4l2.PixelFmtRGB24
-	}
-	return v4l2.PixelFmtMPEG
 }

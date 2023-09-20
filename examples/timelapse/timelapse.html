@@ -14,47 +14,14 @@
     
     <div class="row red accent-2" style="padding: 0px; border:0px; margin: 0px;">
         <div class="col s12 m12 l12">
-            <h1 class="center-align white-text">📸 GoCam</h1>
+            <h1 class="center-align white-text">📸 GoTimeLapse</h1>
         </div>
     </div>
-    <div class="row" style="padding: 0px; border:0px; margin: 0px;">
-        <div class="col s12 m4 l3 blue-grey darken-3"> 
-            <div style="height:100vh ;">
-                <form class="container" action="#">
-                    <div class="card blue-grey darken-1">
-                        <div class="card-content white-text hoverable">
-                            <span class="card-title">Brightness</span>
-                            <p class="range-field" style="margin:0px;">
-                               <input type="range" id="brightness" min="-64" max="64" onclick="setCtrl('brightness', this.value)" />
-                            </p>
-                        </div>
-                    </div>
-                    <div class="card blue-grey darken-1 hoverable">
-                        <div class="card-content white-text">
-                            <span class="card-title">Contrast</span>
-                            <p class="range-field">
-                               <input type="range" id="contrast" min="0" max="64"  onclick="setCtrl('contrast', this.value)"/>
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="card blue-grey darken-1 hoverable">
-                        <div class="card-content white-text">
-                            <span class="card-title">Saturation</span>
-                            <p class="range-field">
-                               <input type="range" id="saturation" min="0" max="128"  onclick="setCtrl('saturation', this.value)"/>
-                            </p>
-                        </div>
-                    </div>
-
-                  </form>
-            </div>
-        </div>
 	<div class="col s12 m8 l9">
             <div class="container center-align">
                 <div class="card">
                     <div class="card-image">
-                        <img id="img" src="http://192.168.50.91:9091/stream"/>
+                        <img id="img" src="stream"/>
                         <span class="card-title">GoCam ({{.StreamInfo}})</span>
                     </div>
                 </div>
