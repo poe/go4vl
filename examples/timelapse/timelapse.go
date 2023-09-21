@@ -167,6 +167,8 @@ func main() {
 		skipDefault = true
 	}
 
+	dateDir := time.Now().Format("2006.06.15")
+
 	format := "yuyv"
 	if !skipDefault {
 		pix, err := defaultDev.GetPixFormat()
@@ -257,12 +259,21 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
+
+
+
+	path := "/timelapse/" + dateDir + "/" + devString + "/"
+	err = os.MkdirAll(path, os.ModePerm)
+	if err != nil {
+		log.Println(err)
+	}
+
 	// process frames from capture channel
 	go func() {
 		count := 0
 
 		for frame := range camera.GetOutput() {
-			fileName := fmt.Sprintf("/timelapse/"+devString+"/capture_%d.jpg", count)
+			fileName := fmt.Sprintf(path + "capture_%06d.jpg", count)
 			file, err := os.Create(fileName)
 			if err != nil {
 				log.Printf("failed to create file %s: %s", fileName, err)
